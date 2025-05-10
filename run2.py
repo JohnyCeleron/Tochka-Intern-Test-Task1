@@ -50,31 +50,9 @@ def _get_graph(data: list[list[str]], positions: list[tuple[int, int]]) \
         graph[pos] = _bfs(data, pos)
     return graph
 
-def _has_key(mask_keys: int, mask_door: int) -> bool:
+def _has_key_for_door(mask_keys: int, mask_door: int) -> bool:
     return mask_keys == (mask_keys | mask_door)
 
-def _dijkstra(graph: dict[tuple[int, int], list[tuple[int, int, int, int]]], start_pos: tuple[int, int], mask_keys: int) \
-    -> dict[tuple[int, int], int]:
-    min_distations = dict()
-    for pos in graph:
-        min_distations[pos] = INF
-    min_distations[start_pos] = 0
-    heap = [(0, start_pos)]
-    while heap:
-        cur_dist, cur_pos = heapq.heappop(heap)
-        if cur_dist > min_distations[cur_pos]:
-            continue
-        for neighbour in graph[cur_pos]:
-            nextI, nextJ, nextDist, mask_door = neighbour
-            if not _has_key(mask_keys, mask_door):
-                continue
-            if min_distations[(nextI, nextJ)] > min_distations[cur_pos] + nextDist:
-               min_distations[(nextI, nextJ)] = min_distations[cur_pos] + nextDist
-               heapq.heappush(heap, (min_distations[(nextI, nextJ)], (nextI, nextJ))) 
-    return min_distations
-
-def _is_robot_label(label: str) -> bool:
-    return label[0] == 'r'
 
 def _get_positions(data):
     height, width = len(data), len(data[0])
@@ -98,21 +76,16 @@ def solve(data: list[list[str]]) -> int:
     robot_positions, key_positions = _get_positions(data)
     positions = robot_positions + key_positions
     graph = _get_graph(data, positions)
-    graph_labels = dict()
-    for pos in graph.keys():
-        graph_labels[pos] = data[pos[0]][pos[1]]
 
     start_positions = tuple(robot_positions)
     mask_all_key = (1 << len(key_positions)) - 1
-    key_index = dict()
-    for pos in key_positions:
-        key_index[pos] = _get_mask(data[pos[0]][pos[1]])
-    heap = [(0, start_positions, 0)]
-    best = {(start_positions, 0): 0}
+    key_index = _build_key_index(data, key_positions)
+    heap_state = [(0, start_positions, 0)]
+    best_dist = {(start_positions, 0): 0}
     
-    while heap:
-        current_distation, current_positions, mask_key = heapq.heappop(heap)
-        if best[(current_positions, mask_key)] < current_distation:
+    while heap_state:
+        current_distation, current_positions, mask_key = heapq.heappop(heap_state)
+        if best_dist[(current_positions, mask_key)] < current_distation:
             continue
         if mask_key == mask_all_key:
             return current_distation
@@ -122,19 +95,29 @@ def solve(data: list[list[str]]) -> int:
                     continue
                 if mask_key & key_index[(nextI, nextJ)]:
                     continue
-                if not _has_key(mask_key, mask_door):
+                if not _has_key_for_door(mask_key, mask_door):
                     continue
                 
-                new_positions = list(current_positions)
-                new_positions[robot_index] = (nextI, nextJ)
-                new_positions = tuple(new_positions)
-                new_mask = mask_key | _get_mask(graph_labels[(nextI, nextJ)])
+                new_positions = _change_robot_positions(current_positions, robot_index, nextI, nextJ)
+                new_mask = mask_key | key_index[(nextI, nextJ)]
                 new_dist = current_distation + nextDist
                 new_state = (new_positions, new_mask)
-                if new_dist < best.get(new_state, INF):
-                    best[new_state] = new_dist
-                    heapq.heappush(heap, (new_dist, new_positions, new_mask))
+                if new_dist < best_dist.get(new_state, INF):
+                    best_dist[new_state] = new_dist
+                    heapq.heappush(heap_state, (new_dist, new_positions, new_mask))
     return -1
+
+def _change_robot_positions(current_positions, robot_index, nextI, nextJ):
+    new_positions = list(current_positions)
+    new_positions[robot_index] = (nextI, nextJ)
+    new_positions = tuple(new_positions)
+    return new_positions
+
+def _build_key_index(data, key_positions):
+    key_index = dict()
+    for pos in key_positions:
+        key_index[pos] = _get_mask(data[pos[0]][pos[1]])
+    return key_index
 
                             
 def main():
